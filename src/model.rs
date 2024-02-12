@@ -5,6 +5,10 @@ use serde_repr::*;
 use uuid::Uuid;
 use crate::date_utils::*;
 
+// Maximum priority level (inclusive)
+pub const MAXPRIORITY: u32 = 3;
+
+// The progress enum is used to track the progession of a given TODO
 #[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug)]
 #[repr(u32)]
 pub enum Progress {
@@ -14,7 +18,7 @@ pub enum Progress {
     ThreeQuarter = 75,
     Full = 100
 }
-
+// Methods to simply edit the progress status of the enum
 impl Progress {
     pub fn up(&self) -> Self {
         use Progress::*;
@@ -38,6 +42,7 @@ impl Progress {
     }
 }
 
+// Main object: TODO
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Todo {
     id: Uuid,
@@ -48,8 +53,6 @@ pub struct Todo {
     completed: bool,
     progress: Progress
 }
-
-pub const MAXPRIORITY: u32 = 3;
 
 impl Todo {
     // Initialization of Todo struct
@@ -78,34 +81,7 @@ impl Todo {
     pub fn get_priority(&self) -> u32 { self.priority }
     pub fn get_progress(&self) -> &Progress { &self.progress }
 }
-
-// impl std::convert::TryFrom<u32> for Progress {
-//     type Error = ();
-//     fn try_from(value: u32) -> Result<Self, Self::Error> {
-//         match value {
-//             0 => Ok(Progress::Zero),
-//             25 => Ok(Progress::Quarter),
-//             50 => Ok(Progress::Half),
-//             75 => Ok(Progress::ThreeQuarter),
-//             100 => Ok(Progress::Full),
-//             _ => Err(())
-//         }
-//     }
-// }
-
-// impl std::convert::TryInto<u32> for Progress {
-//     type Error = ();
-//     fn try_into(self) -> Result<u32, Self::Error> {
-//         match self {
-//             Zero => Ok(0),
-//             Quarter => Ok(25),
-//             Half => Ok(50),
-//             ThreeQuarter => Ok(75),
-//             Full => Ok(100)
-//         }
-//     }
-// }
-
+// Useful enums to keep track of actions/results/events of our functions
 pub enum SortingMethod {
     Priority,
     Due,
