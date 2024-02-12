@@ -57,7 +57,10 @@ fn main() {
             2 => {
                 delete_completed(&db).unwrap_or_else(|e| warn!("{}", e))
             },
-            3 => std::process::exit(0),
+            3 => {
+                clear_term().unwrap_or_else(|e| warn!("{}", e));
+                std::process::exit(0)
+            },
             _ => unreachable!()
         };
     }

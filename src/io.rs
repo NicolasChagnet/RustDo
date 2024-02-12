@@ -2,8 +2,7 @@ use std::cmp::Ordering;
 
 use dialoguer::{theme::ColorfulTheme, Input, MultiSelect, Select};
 use crate::{
-    date_utils::{validate_regex, FORMAT_DATE}, 
-    model::{SortingMethod, Todo, Action, KeyEvent}, service, MAXPRIORITY
+    date_utils::{validate_regex, FORMAT_DATE}, model::{Action, KeyEvent, SortingMethod, Todo}, service, Progress, MAXPRIORITY
 };
 use chrono::Local;
 use console::{style,Term,StyledObject,Key};
@@ -56,6 +55,9 @@ pub fn get_due_date(todo: &Todo) -> Option<StyledObject<String>> {
         || None,
         |due| {
             let base = style(due.format(FORMAT_DATE).to_string());
+            if todo.is_complete() {
+                return Some(base.dim());
+            }
             match due.cmp(&today) {
                 Ordering::Greater => Some(base.green()),
                 Ordering::Equal => Some(base.yellow()),
@@ -73,14 +75,24 @@ pub fn write_todo(todo: &Todo, is_position: bool) -> Result<()> {
         true => ">",
         false => " "
     };
-    match date {
-        Some(v) => term
-            .write_line(&format!("{} {} {} - Due: {}", initial_character, priority, title, v))
-            .with_context(|| "Error while writing line!")?,
-        None => term
-            .write_line(&format!("{} {} {}", initial_character, priority, title))
-            .with_context(|| "Error while writing line!")?
+    let progress = todo.get_progress();
+    let progress_bar = if todo.is_complete() {
+        "[########]"
+    } else {
+        match progress {
+            Progress::Zero => "[        ]",
+            Progress::Quarter => "[##      ]",
+            Progress::Half => "[####    ]",
+            Progress::ThreeQuarter => "[######  ]",
+            Progress::Full => "[########]",
+            
+        }
     };
+    let str_write = match date {
+        Some(date_str) => format!("{} {} {} - Due: {} - Progress: {}", initial_character, priority, title, date_str, progress_bar),
+        None => format!("{} {} {} - Progress: {}", initial_character, priority, title, progress_bar)
+    };
+    term.write_line(&str_write).with_context(|| "Error while writing line!")?;
     Ok(())
 }
 
@@ -199,6 +211,8 @@ pub fn wait_key_event() -> Result<KeyEvent> {
             Key::Char('z') => return Ok(KeyEvent::Delete),
             Key::Char('+') => return Ok(KeyEvent::IncreasePriority),
             Key::Char('-') => return Ok(KeyEvent::DecreasePriority),
+            Key::ArrowLeft => return Ok(KeyEvent::DecreaseProgress),
+            Key::ArrowRight => return Ok(KeyEvent::IncreaseProgress),
             Key::ArrowUp => return Ok(KeyEvent::NavigateUp),
             Key::ArrowDown => return Ok(KeyEvent::NavigateDown),
             _ => continue
@@ -248,6 +262,8 @@ pub fn screen_navigate_todos(todos: &mut Vec<Todo>, position: usize) -> Result<O
         KeyEvent::DecreasePriority => Ok(Some((position, Action::DecreasePriority))),
         KeyEvent::NavigateDown => screen_navigate_todos(todos, add_usize_module(position, size_todos)),
         KeyEvent::NavigateUp => screen_navigate_todos(todos, sub_usize_module(position, size_todos)),
+        KeyEvent::IncreaseProgress => Ok(Some((position, Action::IncreaseProgress))),
+        KeyEvent::DecreaseProgress => Ok(Some((position, Action::DecreaseProgress)))
     }
 }
 

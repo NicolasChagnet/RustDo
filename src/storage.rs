@@ -105,3 +105,27 @@ pub fn delete_todo(db: &Database, todo: &Todo) -> Result<()> {
     }).with_context(|| "Error updating the entry!")?;
     Ok(())
 }
+
+pub fn increase_progress(db: &Database, todo: &Todo) -> Result<()> {
+    let collection: Collection<Todo> = get_collection(db)?;
+    collection.update_one(doc! {
+        "id": todo.get_id().to_string()
+    }, doc! {
+        "$set": doc! {
+            "progress": serde_json::to_string(&todo.get_progress().up())?.parse::<u32>()?
+        }
+    }).with_context(|| "Error updating the entry!")?;
+    Ok(())
+}
+
+pub fn decrease_progress(db: &Database, todo: &Todo) -> Result<()> {
+    let collection: Collection<Todo> = get_collection(db)?;
+    collection.update_one(doc! {
+        "id": todo.get_id().to_string()
+    }, doc! {
+        "$set": doc! {
+            "progress": serde_json::to_string(&todo.get_progress().down())?.parse::<u32>()?
+        }
+    }).with_context(|| "Error updating the entry!")?;
+    Ok(())
+}

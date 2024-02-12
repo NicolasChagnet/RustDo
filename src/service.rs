@@ -156,6 +156,7 @@ pub fn navigate_todos(db: &Database, start_position: usize) -> Result<()> {
     let todos_filtered = get_all_todos(db)?;
     match todos_filtered {
         Some(mut todos) => {
+            sort_todos_by_due_date_asc(&mut todos);
             let navigation = io::screen_navigate_todos(&mut todos, start_position)?;
             // match navigation {
             if let Some((p, action)) = navigation {
@@ -170,6 +171,14 @@ pub fn navigate_todos(db: &Database, start_position: usize) -> Result<()> {
                     },
                     Action::DecreasePriority => {
                         storage::decrease_priority(db, &todos[p])?;
+                        navigate_todos(db, p)?;
+                    },
+                    Action::IncreaseProgress => {
+                        storage::increase_progress(db, &todos[p])?;
+                        navigate_todos(db, p)?;
+                    },
+                    Action::DecreaseProgress => {
+                        storage::decrease_progress(db, &todos[p])?;
                         navigate_todos(db, p)?;
                     },
                     Action::Delete => {
