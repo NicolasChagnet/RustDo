@@ -2,38 +2,46 @@ use std::cmp::Ordering;
 
 use dialoguer::{theme::ColorfulTheme, Input, MultiSelect, Select};
 use crate::{
-    date_utils::{validate_regex, FORMAT_DATE}, model::{Action, KeyEvent, SortingMethod, Todo}, service, Progress, MAXPRIORITY
+    date_utils::{validate_regex, FORMAT_DATE}, 
+    model::{Action, KeyEvent, SortingMethod, Todo}, 
+    service, Progress, MAXPRIORITY
 };
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use console::{style,Term,StyledObject,Key};
 use anyhow::{Context,Result};
 
-pub fn input_title() -> Result<String> {
+pub fn input_title(prewrite: Option<&str>) -> Result<String> {
     let input = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Title (leave empty to go back): ")
+        .with_initial_text(prewrite.unwrap_or("").to_string())
         .allow_empty(true)
         .interact_text()
         .with_context(|| "Error reading input!")?;
     Ok(input)
 }
 
-pub fn input_due_date() -> Result<String> {
+pub fn input_due_date(prewrite: Option<NaiveDate>) -> Result<String> {
+    let prewrite_str = match prewrite {
+        Some(date) => date.format(FORMAT_DATE).to_string(),
+        None => "".to_string()
+    };
     let input =Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Due date [dd-mm(-YYYY)]: ")
         .allow_empty(true)
+        .with_initial_text(prewrite_str)
         .validate_with(validate_regex)
         .interact_text()
         .with_context(|| "Error reading text!")?;
     Ok(input.to_lowercase())
 }
 
-pub fn input_priority() -> Result<u32> {
+pub fn input_priority(init_position: usize) -> Result<u32> {
     let priorities: Vec<u32> = (0..=MAXPRIORITY).collect();
     
     let selection = Select::new()
         .with_prompt("Select a priority level")
         .items(&priorities)
-        .default(0)
+        .default(init_position)
         .interact()
         .with_context(|| "Error reading priorities")?;
 
@@ -162,7 +170,10 @@ pub fn wait_backspace_key() -> Result<()> {
 // This function requests a key and returns the sorting type we wish to use
 pub fn wait_sort_key() -> Result<Option<SortingMethod>> {
     let term = Term::stdout();
-    term.write_line("Press Backspace to go back, p to sort by priority, d by due date, c by date of creation...")
+    term.write_line("
+p: sort by priority   c: sort by date of creation\t
+d: sort by due date   Backspace: go back
+        ")
         .with_context(|| "Error writing line!")?;
     loop {
         let key = term
@@ -181,15 +192,15 @@ pub fn wait_sort_key() -> Result<Option<SortingMethod>> {
 // This function requests a key and returns the sorting type we wish to use
 pub fn wait_confirm_delete() -> Result<bool> {
     let term = Term::stdout();
-    term.write_line("Press Backspace to go back, z to confirm deletion")
+    term.write_line("Confirm deletion? [y/N]")
         .with_context(|| "Error writing line!")?;
     loop {
         let key = term
             .read_key()
             .with_context(|| "Error reading key!")?;
         match key {
-            Key::Backspace => return Ok(false),
-            Key::Char('z') => return Ok(true),
+            Key::Char('y') => return Ok(true),
+            Key::Enter | Key::Char('n') | Key::Char('N') => return Ok(false),
             _ => continue
         }
     }
@@ -198,14 +209,18 @@ pub fn wait_confirm_delete() -> Result<bool> {
 // This function requests a key and returns the sorting type we wish to use
 pub fn wait_key_event() -> Result<KeyEvent> {
     let term = Term::stdout();
-    term.write_line("Press Backspace to go back, s to sort, x to toggle read/unread, +- to change priority, z to delete...")
-        .with_context(|| "Error writing line!")?;
+    term.write_line("
+e: edit     x: toggle read/unread\t
+s: sort     \u{00B1}: change priority\t
+z: delete   Backspace: go back
+    ").with_context(|| "Error writing line!")?;
     loop {
         let key = term
             .read_key()
             .with_context(|| "Error reading key!")?;
         match key {
             Key::Backspace => return Ok(KeyEvent::Back),
+            Key::Char('e') => return Ok(KeyEvent::Edit),
             Key::Char('s') => return Ok(KeyEvent::Sort),
             Key::Char('x') => return Ok(KeyEvent::ToggleRead),
             Key::Char('z') => return Ok(KeyEvent::Delete),
@@ -231,7 +246,7 @@ pub fn screen_navigate_todos(todos: &mut Vec<Todo>, position: usize) -> Result<O
     match key_event {
         KeyEvent::Back => Ok(None),
         KeyEvent::Sort => {
-            clear_lines(1)?;
+            clear_lines(5)?;
             let sorting = wait_sort_key()?;
             match sorting {
                 Some(SortingMethod::Created) => {
@@ -260,6 +275,7 @@ pub fn screen_navigate_todos(todos: &mut Vec<Todo>, position: usize) -> Result<O
         KeyEvent::ToggleRead => Ok(Some((position, Action::ToggleRead))),
         KeyEvent::IncreasePriority => Ok(Some((position, Action::IncreasePriority))),
         KeyEvent::DecreasePriority => Ok(Some((position, Action::DecreasePriority))),
+        KeyEvent::Edit => Ok(Some((position, Action::Edit))),
         KeyEvent::NavigateDown => screen_navigate_todos(todos, add_usize_module(position, size_todos)),
         KeyEvent::NavigateUp => screen_navigate_todos(todos, sub_usize_module(position, size_todos)),
         KeyEvent::IncreaseProgress => Ok(Some((position, Action::IncreaseProgress))),

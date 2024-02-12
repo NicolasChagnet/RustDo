@@ -1,5 +1,6 @@
 use std::env;
-use polodb_core::{bson::doc, ClientCursor, Collection, Database};
+use polodb_core::{bson::doc, bson::to_document, ClientCursor, Collection, Database};
+// use serde::Serialize;
 use crate::model::{Todo, MAXPRIORITY};
 use anyhow::{Result, Context};
 
@@ -54,6 +55,18 @@ pub fn toggle_read(db: &Database, todo: &Todo) -> Result<()> {
         "$set": doc! {
             "completed": !todo.is_complete()
         }
+    }).with_context(|| "Error updating the entry!")?;
+    Ok(())
+}
+
+// Changes the completed status of a DB TODO objects
+pub fn update_todo(db: &Database, todo_replace: &Todo) -> Result<()> {
+    let collection: Collection<Todo> = get_collection(db)?;
+    let doc = to_document(todo_replace)?;
+    collection.update_one(doc! {
+        "id": todo_replace.get_id().to_string()
+    }, doc! {
+        "$set": doc
     }).with_context(|| "Error updating the entry!")?;
     Ok(())
 }

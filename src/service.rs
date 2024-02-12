@@ -40,6 +40,11 @@ pub fn navigate_todos(db: &Database, start_position: usize) -> Result<()> {
             if let Some((p, action)) = navigation {
                 match action {
                     // Each action is directed to the correct DB action
+                    Action::Edit => {
+                        io::show_cursor()?;
+                        io::clear_term()?;
+                        edit_todo(db, &todos[p])?;
+                    },
                     Action::ToggleRead => {
                         storage::toggle_read(db, &todos[p])?;
                     },
@@ -84,17 +89,35 @@ pub fn delete_completed(db: &Database) -> Result<()> {
 // Handles the TODO addition page
 // Returns early to menu if no title is set
 pub fn add_todo(db: &Database) -> Result<()> {
-    let title = io::input_title()?;
+    let title = io::input_title(None)?;
     if title.is_empty() {
         return Ok(());
     }
-    let due_date_str = io::input_due_date()?;
-    let priority = io::input_priority()?;
+    let due_date_str = io::input_due_date(None)?;
+    let priority = io::input_priority(0)?;
 
     let due_date = convert_empty_str_option(&due_date_str);
 
     let todo = Todo::new( &title, priority, due_date);
     storage::insert_todo(db, todo)?;
+    Ok(())
+}
+
+// Handles the TODO edition page
+// Returns early to menu if no title is set
+pub fn edit_todo(db: &Database, todo: &Todo) -> Result<()> {
+    let title = io::input_title(Some(todo.get_title()))?;
+    if title.is_empty() {
+        return Ok(());
+    }
+    let due_date_str = io::input_due_date(todo.get_due_date())?;
+    let priority = io::input_priority(todo.get_priority() as usize)?;
+
+    let due_date = convert_empty_str_option(&due_date_str);
+
+    let mut todo_replace = Todo::new( &title, priority, due_date);
+    todo_replace.set_id(todo.get_id());
+    storage::update_todo(db, &todo_replace)?;
     Ok(())
 } 
 

@@ -37,11 +37,19 @@ fn main() {
         "Exit"
     ];
     let n = menu_items.len();
+    let mut counter_loop: u32 = 0;
     loop {
+        counter_loop += 1;
+
         clear_term().unwrap_or_else(|e| warn!("{}", e));
+        if counter_loop == 1 {
+            navigate_todos(&db, 0).unwrap_or_else(|e| warn!("{}", e));
+            continue;
+        }
         // Present selection of menu choices
         let selection = Select::new()
             .with_prompt("What do you want to do?")
+            .clear(true)
             .default(0)
             .items(&menu_items)
             .interact()

@@ -80,6 +80,7 @@ impl Todo {
     pub fn get_created_date(&self) -> NaiveDateTime { self.created }
     pub fn get_priority(&self) -> u32 { self.priority }
     pub fn get_progress(&self) -> &Progress { &self.progress }
+    pub fn set_id(&mut self, id: Uuid) {self.id = id}
 }
 // Useful enums to keep track of actions/results/events of our functions
 pub enum SortingMethod {
@@ -95,7 +96,8 @@ pub enum Action {
     DecreasePriority,
     Reload,
     IncreaseProgress,
-    DecreaseProgress
+    DecreaseProgress,
+    Edit
 }
 
 pub enum KeyEvent {
@@ -108,5 +110,6 @@ pub enum KeyEvent {
     IncreasePriority,
     DecreasePriority,
     IncreaseProgress,
-    DecreaseProgress
+    DecreaseProgress,
+    Edit
 }
