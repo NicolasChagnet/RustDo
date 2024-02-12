@@ -1,5 +1,5 @@
 use polodb_core::Database;
-use crate::{io, model::Todo, storage};
+use crate::{io, model::{Todo, Action}, storage};
 use log::*;
 use anyhow::Result;
 use std::cmp::Ordering::{self, Equal};
@@ -15,39 +15,24 @@ pub fn get_all_todos(db: &Database) -> Result<Option<Vec<Todo>>> {
             }
         }
     }
-    if todos_filtered.len() > 0 {
+    if !todos_filtered.is_empty() {
         Ok(Some(todos_filtered))
     } else {
         Ok(None)
     }
 }
 
-// Lists all TODOs
-pub fn list_todos(db: &Database) -> Result<()> {
-    let todos_filtered = get_all_todos(db)?;
-    match todos_filtered {
-        Some(mut v) => {
-            sort_todos_by_created_date_asc(&mut v);
-            io::write_todos(&mut v)?;
-        },
-        None => io::write_no_todos()?
-    }
-    Ok(())
-}
-
 // Deletes all todos which are also completed
 pub fn delete_completed(db: &Database) -> Result<()> {
     let todos_filtered = get_all_todos(db)?;
-    match todos_filtered {
-        Some(todos) => {
-            let todos_completed_iter = todos
-                .iter()
-                .filter(|todo| todo.is_complete());
-            for todo in todos_completed_iter {
-                storage::delete_todo(db, todo)?
-            }
-        },
-        None => ()
+    // match todos_filtered {
+    if let Some(todos) = todos_filtered {
+        let todos_completed_iter = todos
+            .iter()
+            .filter(|todo| todo.is_complete());
+        for todo in todos_completed_iter {
+            storage::delete_todo(db, todo)?
+        }
     }
     Ok(())
 }
@@ -88,7 +73,7 @@ pub fn list_mark_read(db: &Database) -> Result<()> {
 
             let selections = io::select_change_status(&titles)?;
             for selection in selections.iter() {
-                storage::update_status(db, &todos[*selection])?;
+                storage::toggle_read(db, &todos[*selection])?;
             }
         },
         None => io::write_no_todos()?
@@ -154,14 +139,48 @@ fn sort_by_created_date(l: &Todo, r: &Todo) -> Ordering {
     }
 }
 
-pub fn sort_todos_by_priority_desc(todos: &mut Vec<Todo>) {
+pub fn sort_todos_by_priority_desc(todos: &mut [Todo]) {
     todos.sort_by(sort_by_priority)
 } 
 
-pub fn sort_todos_by_due_date_asc(todos: &mut Vec<Todo>) {
+pub fn sort_todos_by_due_date_asc(todos: &mut [Todo]) {
     todos.sort_by(sort_by_due_date)
 } 
 
-pub fn sort_todos_by_created_date_asc(todos: &mut Vec<Todo>) {
+pub fn sort_todos_by_created_date_asc(todos: &mut [Todo]) {
     todos.sort_by(sort_by_created_date)
 } 
+
+// Lists all TODOs
+pub fn navigate_todos(db: &Database, start_position: usize) -> Result<()> {
+    let todos_filtered = get_all_todos(db)?;
+    match todos_filtered {
+        Some(mut todos) => {
+            let navigation = io::screen_navigate_todos(&mut todos, start_position)?;
+            // match navigation {
+            if let Some((p, action)) = navigation {
+                match action {
+                    Action::ToggleRead => {
+                        storage::toggle_read(db, &todos[p])?;
+                        navigate_todos(db, p)?;
+                    },
+                    Action::IncreasePriority => {
+                        storage::increase_priority(db, &todos[p])?;
+                        navigate_todos(db, p)?;
+                    },
+                    Action::DecreasePriority => {
+                        storage::decrease_priority(db, &todos[p])?;
+                        navigate_todos(db, p)?;
+                    },
+                    Action::Delete => {
+                        storage::delete_todo(db, &todos[p])?;
+                        navigate_todos(db, p)?;
+                    },
+                    Action::Reload => navigate_todos(db, p)?
+                }
+            }
+        },
+        None => io::write_no_todos()?
+    }
+    Ok(())
+}

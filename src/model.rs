@@ -14,6 +14,7 @@ pub struct Todo {
     completed: bool
 }
 
+pub const MAXPRIORITY: u32 = 3;
 
 impl Todo {
     // Initialization of Todo struct
@@ -21,7 +22,7 @@ impl Todo {
         Todo {
             id: Uuid::now_v7(),
             title: title.to_owned(),
-            priority: priority,
+            priority,
             created: Local::now().naive_local(),
             due: {
                 match due_date_opt {
@@ -45,4 +46,23 @@ pub enum SortingMethod {
     Priority,
     Due,
     Created
+}
+
+pub enum Action {
+    ToggleRead,
+    Delete,
+    IncreasePriority,
+    DecreasePriority,
+    Reload
+}
+
+pub enum KeyEvent {
+    Back,
+    Sort,
+    NavigateUp,
+    NavigateDown,
+    ToggleRead,
+    Delete,
+    IncreasePriority,
+    DecreasePriority
 }

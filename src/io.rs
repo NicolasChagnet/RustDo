@@ -1,6 +1,9 @@
+use std::cmp::Ordering;
+
 use dialoguer::{theme::ColorfulTheme, Input, MultiSelect, Select};
 use crate::{
-    date_utils::{validate_regex, FORMAT_DATE}, model::{SortingMethod, Todo}, service
+    date_utils::{validate_regex, FORMAT_DATE}, 
+    model::{SortingMethod, Todo, Action, KeyEvent}, service, MAXPRIORITY
 };
 use chrono::Local;
 use console::{style,Term,StyledObject,Key};
@@ -26,7 +29,7 @@ pub fn input_due_date() -> Result<String> {
 }
 
 pub fn input_priority() -> Result<u32> {
-    let priorities = vec![0, 1, 2, 3];
+    let priorities: Vec<u32> = (0..=MAXPRIORITY).collect();
     
     let selection = Select::new()
         .with_prompt("Select a priority level")
@@ -53,27 +56,29 @@ pub fn get_due_date(todo: &Todo) -> Option<StyledObject<String>> {
         || None,
         |due| {
             let base = style(due.format(FORMAT_DATE).to_string());
-            if due > today {
-                Some(base.green())
-            } else if due == today {
-                Some(base.yellow())
-            } else {
-                Some(base.red())
+            match due.cmp(&today) {
+                Ordering::Greater => Some(base.green()),
+                Ordering::Equal => Some(base.yellow()),
+                Ordering::Less => Some(base.red())
             }
         })
 }
 
-pub fn write_todo(todo: &Todo) -> Result<()> {
+pub fn write_todo(todo: &Todo, is_position: bool) -> Result<()> {
     let term = Term::stdout();
-    let title = get_title_complete(&todo);
+    let title = get_title_complete(todo);
     let date = get_due_date(todo);
     let priority = get_priority_symbol(todo.get_priority());
+    let initial_character = match is_position {
+        true => ">",
+        false => " "
+    };
     match date {
         Some(v) => term
-            .write_line(&format!("{} {} - Due: {}", priority, title, v))
+            .write_line(&format!("{} {} {} - Due: {}", initial_character, priority, title, v))
             .with_context(|| "Error while writing line!")?,
         None => term
-            .write_line(&format!("{} {}", priority, title))
+            .write_line(&format!("{} {} {}", initial_character, priority, title))
             .with_context(|| "Error while writing line!")?
     };
     Ok(())
@@ -85,28 +90,21 @@ pub fn clear_term() -> Result<()> {
     Ok(())
 }
 
-pub fn write_todos(todos: &mut Vec<Todo>) -> Result<()> {
-    clear_term()?;
-    for todo in todos.iter() {
-        write_todo(todo)?
-    }
-    let sorting = wait_sort_key()?;
-    match sorting {
-        Some(SortingMethod::Created) => {
-            service::sort_todos_by_created_date_asc(todos);
-            write_todos(todos)?;
-        },
-        Some(SortingMethod::Due) => {
-            service::sort_todos_by_due_date_asc(todos);
-            write_todos(todos)?;
-        },
-        Some(SortingMethod::Priority) => {
-            service::sort_todos_by_priority_desc(todos);
-            write_todos(todos)?;
-        },
-        None => ()
-    }
-    // wait_enter_key()?;
+pub fn clear_lines(n: usize) -> Result<()> {
+    let term = Term::stdout();
+    term.clear_last_lines(n).with_context(|| "Error clearing screen!")?;
+    Ok(())
+}
+
+pub fn show_cursor() -> Result<()> {
+    let term = Term::stdout();
+    term.show_cursor().with_context(|| "Error showing cursor!")?;
+    Ok(())
+}
+
+pub fn hide_cursor() -> Result<()> {
+    let term = Term::stdout();
+    term.hide_cursor().with_context(|| "Error showing cursor!")?;
     Ok(())
 }
 
@@ -114,22 +112,18 @@ pub fn write_no_todos() -> Result<()> {
     let term = Term::stdout();
     clear_term()?;
     term.write_line("No TODOs to show!")?;
-    wait_enter_key()?;
+    wait_backspace_key()?;
     Ok(())
 }
 
 fn get_priority_symbol(p: u32) -> String {
     match p {
         0 => "_".to_string(),
-        1 => "!".to_string(),
-        2 => "!!".to_string(),
-        3 => "!!!".to_string(),
-        _ => unreachable!()
+        _ => (1..=p).map(|_| "!").collect::<String>()
     }
 }
 
-// pub fn select_change_status(titles: &Vec<ANSIGenericString<'_, str>>) -> Vec<usize> {
-pub fn select_change_status(titles: &Vec<StyledObject<&str>>) -> Result<Vec<usize>> {
+pub fn select_change_status(titles: &[StyledObject<&str>]) -> Result<Vec<usize>> {
     let multi_select = MultiSelect::new()
         .with_prompt("Change the status of an TODO?")
         .items(titles)
@@ -138,15 +132,15 @@ pub fn select_change_status(titles: &Vec<StyledObject<&str>>) -> Result<Vec<usiz
     Ok(multi_select)
 }
 
-pub fn wait_enter_key() -> Result<()> {
+pub fn wait_backspace_key() -> Result<()> {
     let term = Term::stdout();
-    term.write_line("Press Enter to continue...")
+    term.write_line("Press Backspace to go back...")
         .with_context(|| "Error writing line!")?;
     loop {
         let key = term
         .read_key()
         .with_context(|| "Error reading key!")?;
-        if key == Key::Enter {
+        if key == Key::Backspace {
             break;
         }
     }
@@ -156,18 +150,116 @@ pub fn wait_enter_key() -> Result<()> {
 // This function requests a key and returns the sorting type we wish to use
 pub fn wait_sort_key() -> Result<Option<SortingMethod>> {
     let term = Term::stdout();
-    term.write_line("Press Enter to continue, p to sort by priority, d by due date, c by date of create...")
+    term.write_line("Press Backspace to go back, p to sort by priority, d by due date, c by date of creation...")
         .with_context(|| "Error writing line!")?;
     loop {
         let key = term
             .read_key()
             .with_context(|| "Error reading key!")?;
         match key {
-            Key::Enter => return Ok(None),
+            Key::Backspace => return Ok(None),
             Key::Char('p') => return Ok(Some(SortingMethod::Priority)),
             Key::Char('d') => return Ok(Some(SortingMethod::Due)),
             Key::Char('c') => return Ok(Some(SortingMethod::Created)),
             _ => continue
         }
+    }
+}
+
+// This function requests a key and returns the sorting type we wish to use
+pub fn wait_confirm_delete() -> Result<bool> {
+    let term = Term::stdout();
+    term.write_line("Press Backspace to go back, z to confirm deletion")
+        .with_context(|| "Error writing line!")?;
+    loop {
+        let key = term
+            .read_key()
+            .with_context(|| "Error reading key!")?;
+        match key {
+            Key::Backspace => return Ok(false),
+            Key::Char('z') => return Ok(true),
+            _ => continue
+        }
+    }
+}
+
+// This function requests a key and returns the sorting type we wish to use
+pub fn wait_key_event() -> Result<KeyEvent> {
+    let term = Term::stdout();
+    term.write_line("Press Backspace to go back, s to sort, x to toggle read/unread, +- to change priority, z to delete...")
+        .with_context(|| "Error writing line!")?;
+    loop {
+        let key = term
+            .read_key()
+            .with_context(|| "Error reading key!")?;
+        match key {
+            Key::Backspace => return Ok(KeyEvent::Back),
+            Key::Char('s') => return Ok(KeyEvent::Sort),
+            Key::Char('x') => return Ok(KeyEvent::ToggleRead),
+            Key::Char('z') => return Ok(KeyEvent::Delete),
+            Key::Char('+') => return Ok(KeyEvent::IncreasePriority),
+            Key::Char('-') => return Ok(KeyEvent::DecreasePriority),
+            Key::ArrowUp => return Ok(KeyEvent::NavigateUp),
+            Key::ArrowDown => return Ok(KeyEvent::NavigateDown),
+            _ => continue
+        }
+    }
+}
+
+pub fn screen_navigate_todos(todos: &mut Vec<Todo>, position: usize) -> Result<Option<(usize, Action)>> {
+    clear_term()?;
+    hide_cursor()?;
+    let size_todos = todos.len();
+    for (idx,todo) in todos.iter().enumerate() {
+        write_todo(todo, idx == position)?
+    }
+    let key_event = wait_key_event()?;
+    match key_event {
+        KeyEvent::Back => Ok(None),
+        KeyEvent::Sort => {
+            clear_lines(1)?;
+            let sorting = wait_sort_key()?;
+            match sorting {
+                Some(SortingMethod::Created) => {
+                    service::sort_todos_by_created_date_asc(todos);
+                    screen_navigate_todos(todos, 0)
+                },
+                Some(SortingMethod::Due) => {
+                    service::sort_todos_by_due_date_asc(todos);
+                    screen_navigate_todos(todos, 0)
+                },
+                Some(SortingMethod::Priority) => {
+                    service::sort_todos_by_priority_desc(todos);
+                    screen_navigate_todos(todos, 0)
+                },
+                None => Ok(Some((position, Action::Reload)))
+            }
+        },
+        KeyEvent::Delete => {
+            clear_lines(1)?;
+            let confirmation = wait_confirm_delete()?;
+            match confirmation {
+                true => Ok(Some((position, Action::Delete))),
+                false => Ok(Some((position, Action::Reload)))
+            }
+        },
+        KeyEvent::ToggleRead => Ok(Some((position, Action::ToggleRead))),
+        KeyEvent::IncreasePriority => Ok(Some((position, Action::IncreasePriority))),
+        KeyEvent::DecreasePriority => Ok(Some((position, Action::DecreasePriority))),
+        KeyEvent::NavigateDown => screen_navigate_todos(todos, add_usize_module(position, size_todos)),
+        KeyEvent::NavigateUp => screen_navigate_todos(todos, sub_usize_module(position, size_todos)),
+    }
+}
+
+// Decrements usize without overflow
+fn add_usize_module(x: usize, m: usize) -> usize {
+    if x + 1 == m { 0 } else {x + 1}
+}
+// Increases usize without overflow
+fn sub_usize_module(x: usize, m: usize) -> usize {
+    if x == 0 {
+        if m == 0 { 0 } else { m - 1 }
+    } else {
+        x - 1
     }
 }

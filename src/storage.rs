@@ -1,6 +1,6 @@
 use std::env;
 use polodb_core::{bson::doc, ClientCursor, Collection, Database};
-use crate::model::Todo;
+use crate::model::{Todo, MAXPRIORITY};
 use rand::{distributions::Alphanumeric, Rng};
 use anyhow::{Result, Context};
 
@@ -62,13 +62,37 @@ pub fn insert_todo(db: &Database, todo: Todo) -> Result<()> {
     Ok(())
 }
 
-pub fn update_status(db: &Database, todo: &Todo) -> Result<()> {
+pub fn toggle_read(db: &Database, todo: &Todo) -> Result<()> {
     let collection: Collection<Todo> = get_collection(db)?;
     collection.update_one(doc! {
         "id": todo.get_id().to_string()
     }, doc! {
         "$set": doc! {
             "completed": !todo.is_complete()
+        }
+    }).with_context(|| "Error updating the entry!")?;
+    Ok(())
+}
+
+pub fn increase_priority(db: &Database, todo: &Todo) -> Result<()> {
+    let collection: Collection<Todo> = get_collection(db)?;
+    collection.update_one(doc! {
+        "id": todo.get_id().to_string()
+    }, doc! {
+        "$set": doc! {
+            "priority": std::cmp::min(todo.get_priority() + 1, MAXPRIORITY)
+        }
+    }).with_context(|| "Error updating the entry!")?;
+    Ok(())
+}
+
+pub fn decrease_priority(db: &Database, todo: &Todo) -> Result<()> {
+    let collection: Collection<Todo> = get_collection(db)?;
+    collection.update_one(doc! {
+        "id": todo.get_id().to_string()
+    }, doc! {
+        "$set": doc! {
+            "priority": std::cmp::max(todo.get_priority() as i32 - 1, 0) as u32
         }
     }).with_context(|| "Error updating the entry!")?;
     Ok(())
