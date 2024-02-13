@@ -1,6 +1,6 @@
 use crate::{
     io::{get_priority_symbol, get_progress_str},
-    model::Todo,
+    model::{Todo, MyDate},
     date_utils::FORMAT_DATE
 };
 use std::{
@@ -9,17 +9,17 @@ use std::{
 };
 use anyhow::{Context, Result};
 
-// Converts a TODO in a markdown format
+// Converts a TODO to markdown format
 pub fn convert_todo_str(todo: &Todo) -> String {
     let completed_part = if todo.is_complete() { "[x]" } else { "[ ]" };
     let title = todo.get_title();
     let priority = get_priority_symbol(todo.get_priority());
     let due = match todo.get_due_date() {
-        Some(date) => date.format(FORMAT_DATE).to_string(),
+        Some(MyDate(date)) => date.format(FORMAT_DATE).to_string(),
         None => "".to_string()
     };
     let progress = get_progress_str(todo);
-    let created = todo.get_created_date().format(FORMAT_DATE).to_string();
+    let created = todo.get_created_date().get_0().format(FORMAT_DATE).to_string();
 
     format!(
         "- {} ({}) {} (due: {}) {} % {} % {}\n", 

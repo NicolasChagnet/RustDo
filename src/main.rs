@@ -27,9 +27,10 @@ fn main() {
     ).unwrap();
 
     // Initiating database
-    let db = connect_db().unwrap();
+    let mut db = connect_db().unwrap();
 
+    // Loading screen
     clear_term().unwrap_or_else(|e| warn!("{}", e));
-    navigate_todos(&db, 0).unwrap_or_else(|e| warn!("{}", e));
+    navigate_todos(&mut db, 0, SortingMethod::Due).unwrap_or_else(|e| warn!("{}", e));
     clear_term().unwrap_or_else(|e| warn!("{}", e));
 }

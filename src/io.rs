@@ -1,22 +1,26 @@
 use std::cmp::Ordering;
-
-use dialoguer::{theme::ColorfulTheme, Input, MultiSelect, Select};
+use dialoguer::{theme::ColorfulTheme, Input, Select};
 use crate::{
     date_utils::{validate_regex, FORMAT_DATE}, 
-    model::{Action, KeyEvent, SortingMethod, Todo}, 
-    service, Progress, MAXPRIORITY
+    model::{Action, KeyEvent, SortingMethod, Todo,MyDate}, 
+    Progress, MAXPRIORITY
 };
-use chrono::{Local, NaiveDate};
+use chrono::Local;
 use console::{style,Term,StyledObject,Key};
 use anyhow::{Context,Result};
 
-const MENU: &str = "a: add      m: export to markdown\t
+// Menu constant
+const MENU: &str = "
+-------------------------------------------------------------------------------------------
+a: add      m: export to markdown\t
 e: edit     x: toggle read/unread\t
 s: sort     \u{00B1}: change priority\t
 z: delete   Z: delete all completed\t
 \u{21B5}: exit     \u{023f4}\u{023f5}: change progress";
 const NERASE: usize = 5;
 
+
+// Prompts user for title
 pub fn input_title(prewrite: Option<&str>) -> Result<String> {
     let input = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Title (leave empty to go back): ")
@@ -27,9 +31,10 @@ pub fn input_title(prewrite: Option<&str>) -> Result<String> {
     Ok(input)
 }
 
-pub fn input_due_date(prewrite: Option<NaiveDate>) -> Result<String> {
+// Prompts user for due date
+pub fn input_due_date(prewrite: &Option<MyDate>) -> Result<String> {
     let prewrite_str = match prewrite {
-        Some(date) => date.format(FORMAT_DATE).to_string(),
+        Some(MyDate(date)) => date.format(FORMAT_DATE).to_string(),
         None => "".to_string()
     };
     let input =Input::with_theme(&ColorfulTheme::default())
@@ -42,6 +47,7 @@ pub fn input_due_date(prewrite: Option<NaiveDate>) -> Result<String> {
     Ok(input.to_lowercase())
 }
 
+// Prompts user for priority level
 pub fn input_priority(init_position: usize) -> Result<u32> {
     let priorities: Vec<u32> = (0..=MAXPRIORITY).collect();
     
@@ -55,7 +61,7 @@ pub fn input_priority(init_position: usize) -> Result<u32> {
     Ok(priorities[selection])
 }
 
-
+// Parses the title, strikethrough if complete
 pub fn get_title_complete(todo: &Todo) -> StyledObject<&str> {
     let style_base = style(todo.get_title());
     match todo.is_complete() {
@@ -64,16 +70,19 @@ pub fn get_title_complete(todo: &Todo) -> StyledObject<&str> {
     }
 }
 
+// Parses due date with the appropriate color depending on today's date
+// Green -- future due date, Orange -- today is the due date, Red -- passed due date
+// Dimmed gray color for completed TODOs
 pub fn get_due_date(todo: &Todo) -> Option<StyledObject<String>> {
     let today = Local::now().date_naive();
-    todo.get_due_date().map_or_else(
+    todo.get_due_date().as_ref().map_or_else(
         || None,
         |due| {
-            let base = style(due.format(FORMAT_DATE).to_string());
+            let base = style(due.get_0().format(FORMAT_DATE).to_string());
             if todo.is_complete() {
                 return Some(base.dim());
             }
-            match due.cmp(&today) {
+            match due.get_0().cmp(&today) {
                 Ordering::Greater => Some(base.green()),
                 Ordering::Equal => Some(base.yellow()),
                 Ordering::Less => Some(base.red())
@@ -81,6 +90,7 @@ pub fn get_due_date(todo: &Todo) -> Option<StyledObject<String>> {
         })
 }
 
+// Converts progress status to string progress bar
 pub fn get_progress_str(todo: &Todo) -> String {
     let ret_str = if todo.is_complete() {
         "[########]"
@@ -97,6 +107,15 @@ pub fn get_progress_str(todo: &Todo) -> String {
     ret_str.to_string()
 }
 
+// Converts priority number to priority level string
+pub fn get_priority_symbol(p: u32) -> String {
+    match p {
+        0 => "_".to_string(),
+        _ => (1..=p).map(|_| "!").collect::<String>()
+    }
+}
+
+// Given a TODO element, prints the TODO onscreen
 pub fn write_todo(todo: &Todo, is_position: bool) -> Result<()> {
     let term = Term::stdout();
     let title = get_title_complete(todo);
@@ -115,74 +134,38 @@ pub fn write_todo(todo: &Todo, is_position: bool) -> Result<()> {
     Ok(())
 }
 
+// Clears terminal
 pub fn clear_term() -> Result<()> {
     let term = Term::stdout();
     term.clear_screen().with_context(|| "Error clearing screen!")?;
     Ok(())
 }
 
+// Clears last n lines on terminal
 pub fn clear_lines(n: usize) -> Result<()> {
     let term = Term::stdout();
     term.clear_last_lines(n).with_context(|| "Error clearing screen!")?;
     Ok(())
 }
 
+// Show cursor
 pub fn show_cursor() -> Result<()> {
     let term = Term::stdout();
     term.show_cursor().with_context(|| "Error showing cursor!")?;
     Ok(())
 }
 
+// Hide cursor
 pub fn hide_cursor() -> Result<()> {
     let term = Term::stdout();
     term.hide_cursor().with_context(|| "Error showing cursor!")?;
     Ok(())
 }
 
-pub fn write_no_todos() -> Result<()> {
-    let term = Term::stdout();
-    clear_term()?;
-    term.write_line("No TODOs to show!")?;
-    wait_backspace_key()?;
-    Ok(())
-}
-
-pub fn get_priority_symbol(p: u32) -> String {
-    match p {
-        0 => "_".to_string(),
-        _ => (1..=p).map(|_| "!").collect::<String>()
-    }
-}
-
-pub fn select_change_status(titles: &[StyledObject<&str>]) -> Result<Vec<usize>> {
-    let multi_select = MultiSelect::new()
-        .with_prompt("Change the status of an TODO?")
-        .items(titles)
-        .interact()
-        .with_context(|| "Error selecting options!")?;
-    Ok(multi_select)
-}
-
-pub fn wait_backspace_key() -> Result<()> {
-    let term = Term::stdout();
-    term.write_line("Press Backspace to go back...")
-        .with_context(|| "Error writing line!")?;
-    loop {
-        let key = term
-        .read_key()
-        .with_context(|| "Error reading key!")?;
-        if key == Key::Backspace {
-            break;
-        }
-    }
-    Ok(())
-}
-
-// This function requests a key and returns the sorting type we wish to use
+// This function prompts the user for input on sorthing methods
 pub fn wait_sort_key() -> Result<Option<SortingMethod>> {
     let term = Term::stdout();
-    term.write_line("
-p: sort by priority   c: sort by date of creation\t
+    term.write_line("p: sort by priority   c: sort by date of creation\t
 d: sort by due date   Backspace: go back
         ")
         .with_context(|| "Error writing line!")?;
@@ -200,10 +183,10 @@ d: sort by due date   Backspace: go back
     }
 }
 
-// This function requests a key and returns the sorting type we wish to use
-pub fn wait_confirm_delete() -> Result<bool> {
+// This function prompts the user for confirmation
+pub fn wait_confirm(message: &str) -> Result<bool> {
     let term = Term::stdout();
-    term.write_line("Confirm deletion? [y/N]")
+    term.write_line(format!("{} [y/N]", message).as_str())
         .with_context(|| "Error writing line!")?;
     loop {
         let key = term
@@ -217,7 +200,7 @@ pub fn wait_confirm_delete() -> Result<bool> {
     }
 }
 
-// This function requests a key and returns the sorting type we wish to use
+// This function prompts the user for input on actions to take
 pub fn wait_key_event() -> Result<KeyEvent> {
     let term = Term::stdout();
     term.write_line(MENU).with_context(|| "Error writing line!")?;
@@ -245,6 +228,7 @@ pub fn wait_key_event() -> Result<KeyEvent> {
     }
 }
 
+// Main printing function, prints TODOs, menu and handles simple actions, otherwise returns to service
 pub fn screen_navigate_todos(todos: &mut Vec<Todo>, position: usize) -> Result<Option<(usize, Action)>> {
     clear_term()?;
     hide_cursor()?;
@@ -263,24 +247,15 @@ pub fn screen_navigate_todos(todos: &mut Vec<Todo>, position: usize) -> Result<O
             clear_lines(NERASE)?;
             let sorting = wait_sort_key()?;
             match sorting {
-                Some(SortingMethod::Created) => {
-                    service::sort_todos_by_created_date_asc(todos);
-                    screen_navigate_todos(todos, 0)
-                },
-                Some(SortingMethod::Due) => {
-                    service::sort_todos_by_due_date_asc(todos);
-                    screen_navigate_todos(todos, 0)
-                },
-                Some(SortingMethod::Priority) => {
-                    service::sort_todos_by_priority_desc(todos);
-                    screen_navigate_todos(todos, 0)
+                Some(sort) => {
+                    Ok(Some((0, Action::Sort(sort))))
                 },
                 None => Ok(Some((pos_fixed, Action::Reload)))
             }
         },
         KeyEvent::Delete => {
             clear_lines(NERASE)?;
-            let confirmation = wait_confirm_delete()?;
+            let confirmation = wait_confirm("Confirm deletion?")?;
             match confirmation {
                 true => Ok(Some((pos_fixed, Action::Delete))),
                 false => Ok(Some((pos_fixed, Action::Reload)))
@@ -288,7 +263,7 @@ pub fn screen_navigate_todos(todos: &mut Vec<Todo>, position: usize) -> Result<O
         },
         KeyEvent::DeleteCompleted => {
             clear_lines(NERASE)?;
-            let confirmation = wait_confirm_delete()?;
+            let confirmation = wait_confirm("Confirm deletions?")?;
             match confirmation {
                 true => Ok(Some((pos_fixed, Action::DeleteCompleted))),
                 false => Ok(Some((pos_fixed, Action::Reload)))
