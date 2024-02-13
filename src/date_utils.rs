@@ -5,6 +5,7 @@ use regex::Regex;
 use once_cell::sync::Lazy;
 
 pub const FORMAT_DATE: &str = "%d-%m-%Y";
+pub const FORMAT_DATETIME: &str = "%d-%m-%Y %h-%m-%s";
 pub const ALLOWEDNONDATE: [&str; 4] = [
     "today",
     "tomorrow",
