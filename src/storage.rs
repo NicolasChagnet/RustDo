@@ -3,6 +3,7 @@ use polodb_core::{bson::doc, bson::to_document, ClientCursor, Collection, Databa
 // use serde::Serialize;
 use crate::model::{Todo, MAXPRIORITY};
 use anyhow::{Result, Context};
+use log::*;
 
 // DB connection function
 pub fn connect_db() -> Result<Database> {
@@ -122,9 +123,11 @@ pub fn decrease_progress(db: &Database, todo: &Todo) -> Result<()> {
 
 // Deletes a TODO object from DB
 pub fn delete_todo(db: &Database, todo: &Todo) -> Result<()> {
+    debug!("(Storage) Deleting TODO {:?}", todo);
     let collection: Collection<Todo> = get_collection(db)?;
-    collection.delete_one(doc! {
+    let deletion = collection.delete_one(doc! {
         "id": todo.get_id().to_string()
     }).with_context(|| "Error updating the entry!")?;
+    debug!("(Storage) Deleted TODO {:?}", deletion);
     Ok(())
 }

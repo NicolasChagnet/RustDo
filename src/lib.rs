@@ -3,6 +3,7 @@ mod io;
 mod storage;
 mod service;
 mod date_utils;
+mod md_utils;
 
 pub use model::*;
 pub use io::*;

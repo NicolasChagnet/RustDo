@@ -97,7 +97,10 @@ pub enum Action {
     Reload,
     IncreaseProgress,
     DecreaseProgress,
-    Edit
+    Edit,
+    Add,
+    Export,
+    DeleteCompleted
 }
 
 pub enum KeyEvent {
@@ -111,5 +114,8 @@ pub enum KeyEvent {
     DecreasePriority,
     IncreaseProgress,
     DecreaseProgress,
-    Edit
+    Edit,
+    Add,
+    Export,
+    DeleteCompleted
 }

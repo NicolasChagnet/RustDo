@@ -10,6 +10,13 @@ use chrono::{Local, NaiveDate};
 use console::{style,Term,StyledObject,Key};
 use anyhow::{Context,Result};
 
+const MENU: &str = "a: add      m: export to markdown\t
+e: edit     x: toggle read/unread\t
+s: sort     \u{00B1}: change priority\t
+z: delete   Z: delete all completed\t
+\u{21B5}: exit     \u{023f4}\u{023f5}: change progress";
+const NERASE: usize = 5;
+
 pub fn input_title(prewrite: Option<&str>) -> Result<String> {
     let input = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Title (leave empty to go back): ")
@@ -74,6 +81,22 @@ pub fn get_due_date(todo: &Todo) -> Option<StyledObject<String>> {
         })
 }
 
+pub fn get_progress_str(todo: &Todo) -> String {
+    let ret_str = if todo.is_complete() {
+        "[########]"
+    } else {
+        match todo.get_progress() {
+            Progress::Zero => "[        ]",
+            Progress::Quarter => "[##      ]",
+            Progress::Half => "[####    ]",
+            Progress::ThreeQuarter => "[######  ]",
+            Progress::Full => "[########]",
+            
+        }
+    };
+    ret_str.to_string()
+}
+
 pub fn write_todo(todo: &Todo, is_position: bool) -> Result<()> {
     let term = Term::stdout();
     let title = get_title_complete(todo);
@@ -83,19 +106,7 @@ pub fn write_todo(todo: &Todo, is_position: bool) -> Result<()> {
         true => ">",
         false => " "
     };
-    let progress = todo.get_progress();
-    let progress_bar = if todo.is_complete() {
-        "[########]"
-    } else {
-        match progress {
-            Progress::Zero => "[        ]",
-            Progress::Quarter => "[##      ]",
-            Progress::Half => "[####    ]",
-            Progress::ThreeQuarter => "[######  ]",
-            Progress::Full => "[########]",
-            
-        }
-    };
+    let progress_bar = get_progress_str(todo);
     let str_write = match date {
         Some(date_str) => format!("{} {} {} - Due: {} - Progress: {}", initial_character, priority, title, date_str, progress_bar),
         None => format!("{} {} {} - Progress: {}", initial_character, priority, title, progress_bar)
@@ -136,7 +147,7 @@ pub fn write_no_todos() -> Result<()> {
     Ok(())
 }
 
-fn get_priority_symbol(p: u32) -> String {
+pub fn get_priority_symbol(p: u32) -> String {
     match p {
         0 => "_".to_string(),
         _ => (1..=p).map(|_| "!").collect::<String>()
@@ -209,23 +220,22 @@ pub fn wait_confirm_delete() -> Result<bool> {
 // This function requests a key and returns the sorting type we wish to use
 pub fn wait_key_event() -> Result<KeyEvent> {
     let term = Term::stdout();
-    term.write_line("
-e: edit     x: toggle read/unread\t
-s: sort     \u{00B1}: change priority\t
-z: delete   Backspace: go back
-    ").with_context(|| "Error writing line!")?;
+    term.write_line(MENU).with_context(|| "Error writing line!")?;
     loop {
         let key = term
             .read_key()
             .with_context(|| "Error reading key!")?;
         match key {
-            Key::Backspace => return Ok(KeyEvent::Back),
+            Key::Enter => return Ok(KeyEvent::Back),
+            Key::Char('m') => return Ok(KeyEvent::Export),
+            Key::Char('a') => return Ok(KeyEvent::Add),
             Key::Char('e') => return Ok(KeyEvent::Edit),
             Key::Char('s') => return Ok(KeyEvent::Sort),
             Key::Char('x') => return Ok(KeyEvent::ToggleRead),
             Key::Char('z') => return Ok(KeyEvent::Delete),
             Key::Char('+') => return Ok(KeyEvent::IncreasePriority),
             Key::Char('-') => return Ok(KeyEvent::DecreasePriority),
+            Key::Char('Z') => return Ok(KeyEvent::DeleteCompleted),
             Key::ArrowLeft => return Ok(KeyEvent::DecreaseProgress),
             Key::ArrowRight => return Ok(KeyEvent::IncreaseProgress),
             Key::ArrowUp => return Ok(KeyEvent::NavigateUp),
@@ -239,14 +249,18 @@ pub fn screen_navigate_todos(todos: &mut Vec<Todo>, position: usize) -> Result<O
     clear_term()?;
     hide_cursor()?;
     let size_todos = todos.len();
+    let pos_fixed = get_pos_overflow(position, size_todos);
     for (idx,todo) in todos.iter().enumerate() {
-        write_todo(todo, idx == position)?
+        write_todo(todo, idx == pos_fixed)?
     }
     let key_event = wait_key_event()?;
     match key_event {
-        KeyEvent::Back => Ok(None),
+        KeyEvent::Back => {
+            show_cursor()?;
+            Ok(None)
+        },
         KeyEvent::Sort => {
-            clear_lines(5)?;
+            clear_lines(NERASE)?;
             let sorting = wait_sort_key()?;
             match sorting {
                 Some(SortingMethod::Created) => {
@@ -261,25 +275,35 @@ pub fn screen_navigate_todos(todos: &mut Vec<Todo>, position: usize) -> Result<O
                     service::sort_todos_by_priority_desc(todos);
                     screen_navigate_todos(todos, 0)
                 },
-                None => Ok(Some((position, Action::Reload)))
+                None => Ok(Some((pos_fixed, Action::Reload)))
             }
         },
         KeyEvent::Delete => {
-            clear_lines(1)?;
+            clear_lines(NERASE)?;
             let confirmation = wait_confirm_delete()?;
             match confirmation {
-                true => Ok(Some((position, Action::Delete))),
-                false => Ok(Some((position, Action::Reload)))
+                true => Ok(Some((pos_fixed, Action::Delete))),
+                false => Ok(Some((pos_fixed, Action::Reload)))
             }
         },
-        KeyEvent::ToggleRead => Ok(Some((position, Action::ToggleRead))),
-        KeyEvent::IncreasePriority => Ok(Some((position, Action::IncreasePriority))),
-        KeyEvent::DecreasePriority => Ok(Some((position, Action::DecreasePriority))),
-        KeyEvent::Edit => Ok(Some((position, Action::Edit))),
-        KeyEvent::NavigateDown => screen_navigate_todos(todos, add_usize_module(position, size_todos)),
-        KeyEvent::NavigateUp => screen_navigate_todos(todos, sub_usize_module(position, size_todos)),
-        KeyEvent::IncreaseProgress => Ok(Some((position, Action::IncreaseProgress))),
-        KeyEvent::DecreaseProgress => Ok(Some((position, Action::DecreaseProgress)))
+        KeyEvent::DeleteCompleted => {
+            clear_lines(NERASE)?;
+            let confirmation = wait_confirm_delete()?;
+            match confirmation {
+                true => Ok(Some((pos_fixed, Action::DeleteCompleted))),
+                false => Ok(Some((pos_fixed, Action::Reload)))
+            }
+        },
+        KeyEvent::ToggleRead => Ok(Some((pos_fixed, Action::ToggleRead))),
+        KeyEvent::IncreasePriority => Ok(Some((pos_fixed, Action::IncreasePriority))),
+        KeyEvent::DecreasePriority => Ok(Some((pos_fixed, Action::DecreasePriority))),
+        KeyEvent::Edit => Ok(Some((pos_fixed, Action::Edit))),
+        KeyEvent::Add => Ok(Some((pos_fixed, Action::Add))),
+        KeyEvent::NavigateDown => screen_navigate_todos(todos, add_usize_module(pos_fixed, size_todos)),
+        KeyEvent::NavigateUp => screen_navigate_todos(todos, sub_usize_module(pos_fixed, size_todos)),
+        KeyEvent::IncreaseProgress => Ok(Some((pos_fixed, Action::IncreaseProgress))),
+        KeyEvent::DecreaseProgress => Ok(Some((pos_fixed, Action::DecreaseProgress))),
+        KeyEvent::Export => Ok(Some((pos_fixed, Action::Export)))
     }
 }
 
@@ -294,4 +318,14 @@ fn sub_usize_module(x: usize, m: usize) -> usize {
     } else {
         x - 1
     }
+}
+
+fn get_pos_overflow(p: usize, m: usize) -> usize {
+    if m == 0 {
+        return 0;
+    }
+    if p >= m {
+        return m - 1;
+    }
+    p
 }

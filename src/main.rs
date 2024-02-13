@@ -1,5 +1,5 @@
 use dotenv::dotenv;
-use dialoguer::Select;
+// use dialoguer::Select;
 use todo::*;
 
 use simplelog::*;
@@ -22,54 +22,14 @@ fn main() {
     CombinedLogger::init(
         vec![
             TermLogger::new(LevelFilter::Warn, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-            WriteLogger::new(LevelFilter::Info, Config::default(), File::create(log_file).expect("Error opening log file!")),
+            WriteLogger::new(LevelFilter::Debug, Config::default(), File::create(log_file).expect("Error opening log file!")),
         ]
     ).unwrap();
 
     // Initiating database
     let db = connect_db().unwrap();
 
-    // Generating menu
-    let menu_items = vec![
-        "List TODOs", 
-        "Add TODO", 
-        "Delete completed", 
-        "Exit"
-    ];
-    let n = menu_items.len();
-    let mut counter_loop: u32 = 0;
-    loop {
-        counter_loop += 1;
-
-        clear_term().unwrap_or_else(|e| warn!("{}", e));
-        if counter_loop == 1 {
-            navigate_todos(&db, 0).unwrap_or_else(|e| warn!("{}", e));
-            continue;
-        }
-        // Present selection of menu choices
-        let selection = Select::new()
-            .with_prompt("What do you want to do?")
-            .clear(true)
-            .default(0)
-            .items(&menu_items)
-            .interact()
-            .unwrap_or( n);
-        // Handles the selction and forwards to appropriate branch
-        match selection {
-            0 => {
-                navigate_todos(&db, 0).unwrap_or_else(|e| warn!("{}", e))
-            },
-            1 => {
-                add_todo(&db).unwrap_or_else(|e| warn!("{}", e))
-            },
-            2 => {
-                delete_completed(&db).unwrap_or_else(|e| warn!("{}", e))
-            },
-            3 => {
-                clear_term().unwrap_or_else(|e| warn!("{}", e));
-                std::process::exit(0)
-            },
-            _ => unreachable!()
-        };
-    }
+    clear_term().unwrap_or_else(|e| warn!("{}", e));
+    navigate_todos(&db, 0).unwrap_or_else(|e| warn!("{}", e));
+    clear_term().unwrap_or_else(|e| warn!("{}", e));
 }
