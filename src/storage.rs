@@ -1,39 +1,11 @@
 use std::env;
-use polodb_core::{bson::doc, ClientCursor, Collection, Database};
-use crate::model::Todo;
-use rand::{distributions::Alphanumeric, Rng};
+use polodb_core::{bson::doc, bson::to_document, ClientCursor, Collection, Database};
+// use serde::Serialize;
+use crate::model::{Todo, MAXPRIORITY};
 use anyhow::{Result, Context};
+use log::*;
 
-const NSTR: usize = 6;
-
-
-pub fn gen_random_string() -> String {
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(NSTR)
-        .map(char::from)
-        .collect()
-}
-
-pub fn get_new_index(db: &Database) -> Result<String> {
-    let collection = get_collection(db)?;
-    let mut random_str = gen_random_string();
-    let mut query = collection.find_one(doc! {
-        "id": random_str.clone()
-    }).with_context(|| "Error fetching the database!")?;
-    loop {
-        match query {
-            None => return Ok(random_str),
-            Some(_)=> {
-                random_str = gen_random_string();
-                query = collection.find_one(doc! {
-                    "id": random_str.clone()
-                }).with_context(|| "Error fetching the database!")?;
-            }
-        }
-    }
-}
-
+// DB connection function
 pub fn connect_db() -> Result<Database> {
     let filename = env::var("DB_FILE").expect("Error loading DB filename from environment variables!");
     let db = Database::open_file(filename)
@@ -41,12 +13,14 @@ pub fn connect_db() -> Result<Database> {
     Ok(db)
 }
 
+// Get the main TODO collection
 pub fn get_collection(db: &Database) -> Result<Collection<Todo>> {
     let collection_name = env::var("DB_COLLECTION")
         .with_context(|| "Error loading the collection filename from environment variables!")?;
     Ok(db.collection::<Todo>(&collection_name))
 }
 
+// Queries the DB for all TODOs
 pub fn get_todos(db: &Database) -> Result<ClientCursor<Todo>> {
     let collection: Collection<Todo> = get_collection(db)?;
     let query = collection.find(None)
@@ -54,6 +28,17 @@ pub fn get_todos(db: &Database) -> Result<ClientCursor<Todo>> {
     Ok(query)
 }
 
+// Queries the DB for all TODOs
+pub fn get_completed_todos(db: &Database) -> Result<ClientCursor<Todo>> {
+    let collection: Collection<Todo> = get_collection(db)?;
+    let query = collection.find(doc! {
+        "completed": true
+    })
+        .with_context(|| "Error fetching the database!")?;
+    Ok(query)
+}
+
+// Inserts a TODO object inside the DB
 pub fn insert_todo(db: &Database, todo: Todo) -> Result<()> {
     let collection: Collection<Todo> = get_collection(db)?;
     collection
@@ -62,7 +47,8 @@ pub fn insert_todo(db: &Database, todo: Todo) -> Result<()> {
     Ok(())
 }
 
-pub fn update_status(db: &Database, todo: &Todo) -> Result<()> {
+// Changes the completed status of a DB TODO objects
+pub fn toggle_read(db: &Database, todo: &Todo) -> Result<()> {
     let collection: Collection<Todo> = get_collection(db)?;
     collection.update_one(doc! {
         "id": todo.get_id().to_string()
@@ -74,10 +60,74 @@ pub fn update_status(db: &Database, todo: &Todo) -> Result<()> {
     Ok(())
 }
 
-pub fn delete_todo(db: &Database, todo: &Todo) -> Result<()> {
+// Changes the completed status of a DB TODO objects
+pub fn update_todo(db: &Database, todo_replace: &Todo) -> Result<()> {
     let collection: Collection<Todo> = get_collection(db)?;
-    collection.delete_one(doc! {
+    let doc = to_document(todo_replace)?;
+    collection.update_one(doc! {
+        "id": todo_replace.get_id().to_string()
+    }, doc! {
+        "$set": doc
+    }).with_context(|| "Error updating the entry!")?;
+    Ok(())
+}
+
+// Various DB update functions to increase/decrease the priority or progress
+pub fn increase_priority(db: &Database, todo: &Todo) -> Result<()> {
+    let collection: Collection<Todo> = get_collection(db)?;
+    collection.update_one(doc! {
+        "id": todo.get_id().to_string()
+    }, doc! {
+        "$set": doc! {
+            "priority": std::cmp::min(todo.get_priority() + 1, MAXPRIORITY)
+        }
+    }).with_context(|| "Error updating the entry!")?;
+    Ok(())
+}
+
+pub fn decrease_priority(db: &Database, todo: &Todo) -> Result<()> {
+    let collection: Collection<Todo> = get_collection(db)?;
+    collection.update_one(doc! {
+        "id": todo.get_id().to_string()
+    }, doc! {
+        "$set": doc! {
+            "priority": std::cmp::max(todo.get_priority() as i32 - 1, 0) as u32
+        }
+    }).with_context(|| "Error updating the entry!")?;
+    Ok(())
+}
+
+pub fn increase_progress(db: &Database, todo: &Todo) -> Result<()> {
+    let collection: Collection<Todo> = get_collection(db)?;
+    collection.update_one(doc! {
+        "id": todo.get_id().to_string()
+    }, doc! {
+        "$set": doc! {
+            "progress": serde_json::to_string(&todo.get_progress().up())?.parse::<u32>()?
+        }
+    }).with_context(|| "Error updating the entry!")?;
+    Ok(())
+}
+
+pub fn decrease_progress(db: &Database, todo: &Todo) -> Result<()> {
+    let collection: Collection<Todo> = get_collection(db)?;
+    collection.update_one(doc! {
+        "id": todo.get_id().to_string()
+    }, doc! {
+        "$set": doc! {
+            "progress": serde_json::to_string(&todo.get_progress().down())?.parse::<u32>()?
+        }
+    }).with_context(|| "Error updating the entry!")?;
+    Ok(())
+}
+
+// Deletes a TODO object from DB
+pub fn delete_todo(db: &Database, todo: &Todo) -> Result<()> {
+    debug!("(Storage) Deleting TODO {:?}", todo);
+    let collection: Collection<Todo> = get_collection(db)?;
+    let deletion = collection.delete_one(doc! {
         "id": todo.get_id().to_string()
     }).with_context(|| "Error updating the entry!")?;
+    debug!("(Storage) Deleted TODO {:?}", deletion);
     Ok(())
 }

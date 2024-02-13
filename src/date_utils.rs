@@ -4,14 +4,14 @@ use anyhow::Result;
 use regex::Regex;
 use once_cell::sync::Lazy;
 
-pub const FORMAT_DATE: &'static str = "%d-%m-%Y";
-pub const ALLOWEDNONDATE: [&'static str; 4] = [
+pub const FORMAT_DATE: &str = "%d-%m-%Y";
+pub const ALLOWEDNONDATE: [&str; 4] = [
     "today",
     "tomorrow",
     "next week",
     "next month"
 ];
-pub const ALLOWEDWEEKDAY: [&'static str; 7] = [
+pub const ALLOWEDWEEKDAY: [&str; 7] = [
     "monday",
     "tuesday",
     "wednesday",
@@ -42,11 +42,10 @@ pub fn convert_str_valid_date(due_str: &str) -> Result<NaiveDate> {
                 get_next_weekday(due_str)?
             } else {
                 anyhow::bail!("Wrong date format!");
-                // NaiveDate::parse_from_str(&format!("{}", due_str), FORMAT_DATE)?
             }
         }
         _ => {
-            NaiveDate::parse_from_str(&format!("{}", due_str), FORMAT_DATE)?
+            NaiveDate::parse_from_str(due_str, FORMAT_DATE)?
 
         }
     };
