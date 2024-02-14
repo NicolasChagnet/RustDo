@@ -1,10 +1,8 @@
 use dotenv::dotenv;
-// use dialoguer::Select;
-use todo::*;
-
-use simplelog::*;
 use log::*;
+use simplelog::*;
 use std::{env, fs::File};
+use todo::*;
 
 const DEFAULT_LOG: &str = "todo.log";
 
@@ -15,16 +13,26 @@ fn main() {
     let log_file = match env::var("LOG_FILE") {
         Ok(v) => v.clone(),
         Err(_) => {
-            error!("Error loading log filename from environment variables, switching to default...");
+            error!(
+                "Error loading log filename from environment variables, switching to default..."
+            );
             DEFAULT_LOG.to_string()
         }
     };
-    CombinedLogger::init(
-        vec![
-            TermLogger::new(LevelFilter::Warn, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-            WriteLogger::new(LevelFilter::Debug, Config::default(), File::create(log_file).expect("Error opening log file!")),
-        ]
-    ).unwrap();
+    CombinedLogger::init(vec![
+        TermLogger::new(
+            LevelFilter::Warn,
+            Config::default(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        ),
+        WriteLogger::new(
+            LevelFilter::Debug,
+            Config::default(),
+            File::create(log_file).expect("Error opening log file!"),
+        ),
+    ])
+    .unwrap();
 
     // Initiating database
     let mut db = connect_db().unwrap();

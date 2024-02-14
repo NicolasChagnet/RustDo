@@ -1,12 +1,8 @@
+use crate::date_utils::*;
 use chrono::prelude::*;
 use chrono::NaiveDate;
-use humphrey_json::{
-    prelude::*,
-    Value,
-    error::ParseError
-};
+use humphrey_json::{error::ParseError, prelude::*, Value};
 use uuid::Uuid;
-use crate::date_utils::*;
 
 pub type TodoCollection = Vec<Todo>;
 pub type TodoCollectionRef = [Todo];
@@ -21,7 +17,7 @@ pub enum Progress {
     Quarter = 25,
     Half = 50,
     ThreeQuarter = 75,
-    Full = 100
+    Full = 100,
 }
 // Methods to simply edit the progress status of the enum
 impl Progress {
@@ -32,7 +28,7 @@ impl Progress {
             Quarter => Half,
             Half => ThreeQuarter,
             ThreeQuarter => Full,
-            Full => Full
+            Full => Full,
         }
     }
     pub fn down(&self) -> Self {
@@ -42,7 +38,7 @@ impl Progress {
             Quarter => Zero,
             Half => Quarter,
             ThreeQuarter => Half,
-            Full => ThreeQuarter
+            Full => ThreeQuarter,
         }
     }
 }
@@ -50,7 +46,9 @@ impl Progress {
 // Some wrappers for chrono's NaiveDate, NaiveDateTime. Required to implement easy JSON serialization
 pub struct MyDateTime(pub NaiveDateTime);
 impl MyDateTime {
-    pub fn get_0(&self) -> NaiveDateTime {self.0 } 
+    pub fn get_0(&self) -> NaiveDateTime {
+        self.0
+    }
 }
 impl IntoJson for MyDateTime {
     fn to_json(&self) -> Value {
@@ -64,22 +62,26 @@ impl FromJson for MyDateTime {
                 let convert_result = NaiveDateTime::parse_from_str(s, FORMAT_DATETIME);
                 match convert_result {
                     Ok(datetime) => Ok(MyDateTime(datetime)),
-                    Err(_) => Err(ParseError::TypeError)
+                    Err(_) => Err(ParseError::TypeError),
                 }
-            },
-            _ => Err(ParseError::TypeError)
+            }
+            _ => Err(ParseError::TypeError),
         }
     }
 }
 impl std::fmt::Debug for MyDateTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MyDateTime").field("DateTime", &self.0).finish()
+        f.debug_struct("MyDateTime")
+            .field("DateTime", &self.0)
+            .finish()
     }
 }
 
 pub struct MyDate(pub NaiveDate);
 impl MyDate {
-    pub fn get_0(&self) -> NaiveDate {self.0 } 
+    pub fn get_0(&self) -> NaiveDate {
+        self.0
+    }
 }
 impl IntoJson for MyDate {
     fn to_json(&self) -> Value {
@@ -93,10 +95,10 @@ impl FromJson for MyDate {
                 let convert_result = NaiveDate::parse_from_str(s, FORMAT_DATE);
                 match convert_result {
                     Ok(date) => Ok(MyDate(date)),
-                    Err(_) => Err(ParseError::TypeError)
+                    Err(_) => Err(ParseError::TypeError),
                 }
-            },
-            _ => Err(ParseError::TypeError)
+            }
+            _ => Err(ParseError::TypeError),
         }
     }
 }
@@ -115,7 +117,7 @@ pub struct Todo {
     created: MyDateTime,
     due: Option<MyDate>,
     completed: bool,
-    progress: Progress
+    progress: Progress,
 }
 
 impl Todo {
@@ -133,35 +135,61 @@ impl Todo {
                         let convert_date = convert_str_valid_date(due_date);
                         match convert_date {
                             Ok(date) => Some(MyDate(date)),
-                            Err(_) => None
+                            Err(_) => None,
                         }
                     }
                 }
             },
             completed: false,
-            progress: Progress::Zero
+            progress: Progress::Zero,
         }
     }
     // methods to access/set private properties
-    pub fn is_complete(&self) -> bool { self.completed }
-    pub fn get_id(&self) -> &str { &self.id }
-    pub fn get_title(&self) -> &str { &self.title }
-    pub fn get_due_date(&self) -> &Option<MyDate> { &self.due }
-    pub fn get_created_date(&self) -> &MyDateTime { &self.created }
-    pub fn get_priority(&self) -> u32 { self.priority }
-    pub fn get_progress(&self) -> &Progress { &self.progress }
-    pub fn set_id(&mut self, id: &str) {self.id = id.to_string()}
-    pub fn toggle_read(&mut self) {self.completed = !self.completed}
-    pub fn increase_priority(&mut self) { self.priority = std::cmp::min(self.priority + 1, MAXPRIORITY) }
-    pub fn decrease_priority(&mut self) { self.priority = std::cmp::max(self.priority as i32 - 1, 0) as u32 }
-    pub fn increase_progress(&mut self) { self.progress = self.progress.up() }
-    pub fn decrease_progress(&mut self) { self.progress = self.progress.down() }
+    pub fn is_complete(&self) -> bool {
+        self.completed
+    }
+    pub fn get_id(&self) -> &str {
+        &self.id
+    }
+    pub fn get_title(&self) -> &str {
+        &self.title
+    }
+    pub fn get_due_date(&self) -> &Option<MyDate> {
+        &self.due
+    }
+    pub fn get_created_date(&self) -> &MyDateTime {
+        &self.created
+    }
+    pub fn get_priority(&self) -> u32 {
+        self.priority
+    }
+    pub fn get_progress(&self) -> &Progress {
+        &self.progress
+    }
+    pub fn set_id(&mut self, id: &str) {
+        self.id = id.to_string()
+    }
+    pub fn toggle_read(&mut self) {
+        self.completed = !self.completed
+    }
+    pub fn increase_priority(&mut self) {
+        self.priority = std::cmp::min(self.priority + 1, MAXPRIORITY)
+    }
+    pub fn decrease_priority(&mut self) {
+        self.priority = std::cmp::max(self.priority as i32 - 1, 0) as u32
+    }
+    pub fn increase_progress(&mut self) {
+        self.progress = self.progress.up()
+    }
+    pub fn decrease_progress(&mut self) {
+        self.progress = self.progress.down()
+    }
 }
 // Useful enums to keep track of actions/results/events of our functions
 pub enum SortingMethod {
     Priority,
     Due,
-    Created
+    Created,
 }
 
 pub enum Action {
@@ -176,7 +204,7 @@ pub enum Action {
     Edit,
     Add,
     Export,
-    DeleteCompleted
+    DeleteCompleted,
 }
 
 pub enum KeyEvent {
@@ -193,5 +221,5 @@ pub enum KeyEvent {
     Edit,
     Add,
     Export,
-    DeleteCompleted
+    DeleteCompleted,
 }

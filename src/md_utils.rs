@@ -1,13 +1,10 @@
 use crate::{
+    date_utils::FORMAT_DATE,
     io::{get_priority_symbol, get_progress_str},
-    model::{Todo, MyDate},
-    date_utils::FORMAT_DATE
-};
-use std::{
-    env,
-    fs, io::Write
+    model::{MyDate, Todo},
 };
 use anyhow::{Context, Result};
+use std::{env, fs, io::Write};
 
 // Converts a TODO to markdown format
 pub fn convert_todo_str(todo: &Todo) -> String {
@@ -16,19 +13,23 @@ pub fn convert_todo_str(todo: &Todo) -> String {
     let priority = get_priority_symbol(todo.get_priority());
     let due = match todo.get_due_date() {
         Some(MyDate(date)) => date.format(FORMAT_DATE).to_string(),
-        None => "".to_string()
+        None => "".to_string(),
     };
     let progress = get_progress_str(todo);
-    let created = todo.get_created_date().get_0().format(FORMAT_DATE).to_string();
+    let created = todo
+        .get_created_date()
+        .get_0()
+        .format(FORMAT_DATE)
+        .to_string();
 
     format!(
-        "- {} ({}) {} (due: {}) {} % {} % {}\n", 
-        completed_part, 
-        priority, 
-        title, 
-        due, 
+        "- {} ({}) {} (due: {}) {} % {} % {}\n",
+        completed_part,
+        priority,
+        title,
+        due,
         progress,
-        created, 
+        created,
         todo.get_id()
     )
 }
@@ -41,10 +42,7 @@ pub fn export_to_md(todos: &[Todo]) -> Result<()> {
         .truncate(true)
         .open(md_filename)
         .with_context(|| "Error opening markdown file!")?;
-    let total_write: String = todos
-        .iter()
-        .map(convert_todo_str)
-        .collect();
+    let total_write: String = todos.iter().map(convert_todo_str).collect();
     md_file.write_all(total_write.as_bytes())?;
     Ok(())
 }
