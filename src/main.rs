@@ -1,44 +1,24 @@
-use dotenv::dotenv;
-use log::*;
-use simplelog::*;
-use std::{env, fs::File};
-use todo::*;
-
-const DEFAULT_LOG: &str = "todo.log";
+use rustdo::*;
+use std::env;
 
 fn main() {
     // Loading environment variables
-    dotenv().ok();
-    // Logging system
-    let log_file = match env::var("LOG_FILE") {
-        Ok(v) => v.clone(),
-        Err(_) => {
-            error!(
-                "Error loading log filename from environment variables, switching to default..."
-            );
-            DEFAULT_LOG.to_string()
-        }
-    };
-    CombinedLogger::init(vec![
-        TermLogger::new(
-            LevelFilter::Warn,
-            Config::default(),
-            TerminalMode::Mixed,
-            ColorChoice::Auto,
-        ),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            Config::default(),
-            File::create(log_file).expect("Error opening log file!"),
-        ),
-    ])
-    .unwrap();
+    load_env().unwrap_or(eprintln!("Error loading the configuration file!"));
 
     // Initiating database
     let mut db = connect_db().unwrap();
 
+    let default_sort = match env::var("DEFAULT_SORT")
+        .unwrap_or("due".to_string())
+        .as_str()
+    {
+        "priority" => SortingMethod::Priority,
+        "created" => SortingMethod::Created,
+        _ => SortingMethod::Due,
+    };
+
     // Loading screen
-    clear_term().unwrap_or_else(|e| warn!("{}", e));
-    navigate_todos(&mut db, 0, SortingMethod::Due).unwrap_or_else(|e| warn!("{}", e));
-    clear_term().unwrap_or_else(|e| warn!("{}", e));
+    clear_term().unwrap_or_else(|e| eprintln!("{}", e));
+    navigate_todos(&mut db, 0, default_sort).unwrap_or_else(|e| eprintln!("{}", e));
+    clear_term().unwrap_or_else(|e| eprintln!("{}", e));
 }

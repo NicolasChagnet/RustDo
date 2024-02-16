@@ -1,23 +1,32 @@
 [package]
-name = "todo"
+name = "rustdo"
 version = "0.1.0"
 edition = "2021"
+description = "A simple cross-platform CLI tool to manage simple to-dos interactively."
+authors = ["Nicolas Chagnet <nchagnet@gmail.com>"]
+repository = "https://github.com/NicolasChagnet/RustDo"
+license = "MIT"
+readme = "README.md"
+keywords = ["todo", "cli", "cross-platform"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "rustdo"
+path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0.79"
-bson = { version = "2.9.0", features = ["chrono", "serde_with"] }
 chrono = { version = "0.4.33", features = ["serde"] }
 console = "0.15.8"
 dialoguer = "0.11.0"
+directories = "5.0.1"
 dotenv = "0.15.0"
 humphrey_json = "0.2.2"
 jasondb = "0.2.7"
-log = "0.4.20"
 once_cell = "1.19.0"
 rand = "0.8.5"
 regex = "1.10.3"
-simplelog = "0.12.1"
 thiserror = "1.0.56"
 uuid = { version = "1.3.0", features = ["v7"] }

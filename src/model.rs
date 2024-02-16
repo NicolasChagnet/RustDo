@@ -144,6 +144,25 @@ impl Todo {
             progress: Progress::Zero,
         }
     }
+    pub fn from_scratch(
+        id: &str,
+        title: &str,
+        priority: u32,
+        created: MyDateTime,
+        due: Option<MyDate>,
+        completed: bool,
+        progress: Progress,
+    ) -> Todo {
+        Todo {
+            id: id.to_string(),
+            title: title.to_string(),
+            created,
+            priority,
+            due,
+            completed,
+            progress,
+        }
+    }
     // methods to access/set private properties
     pub fn is_complete(&self) -> bool {
         self.completed
@@ -168,6 +187,9 @@ impl Todo {
     }
     pub fn set_id(&mut self, id: &str) {
         self.id = id.to_string()
+    }
+    pub fn set_creation_date(&mut self, date: MyDateTime) {
+        self.created = date
     }
     pub fn toggle_read(&mut self) {
         self.completed = !self.completed

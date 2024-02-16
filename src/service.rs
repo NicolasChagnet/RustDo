@@ -5,8 +5,8 @@ use crate::{
     storage,
 };
 use anyhow::Result;
-use log::*;
 use std::cmp::Ordering::{self, Equal};
+use std::env;
 
 // Extracts the TODO collection from the vector of tuples.
 pub fn get_todo_tuple(todos_tup: Vec<(String, Todo)>) -> TodoCollection {
@@ -40,61 +40,52 @@ pub fn navigate_todos(
                 Action::Add => {
                     io::show_cursor()?;
                     io::clear_term()?;
-                    debug!("(Service) Adding TODO");
                     add_todo(db)?;
                 }
                 Action::Edit => {
                     io::show_cursor()?;
                     io::clear_term()?;
                     if !todos.is_empty() {
-                        debug!("(Service) Editing TODO {:?}", &todos[p]);
                         edit_todo(db, &todos[p])?;
                     }
                 }
                 Action::ToggleRead => {
                     if !todos.is_empty() {
-                        debug!("(Service) Toggle read TODO {:?}", &todos[p]);
                         todos[p].toggle_read(); //Mark TODO read
                         storage::update_todo(db, &todos[p])?;
                     }
                 }
                 Action::IncreasePriority => {
                     if !todos.is_empty() {
-                        debug!("(Service) Up prio TODO {:?}", &todos[p]);
                         todos[p].increase_priority(); //Mark TODO read
                         storage::update_todo(db, &todos[p])?;
                     }
                 }
                 Action::DecreasePriority => {
                     if !todos.is_empty() {
-                        debug!("(Service) Down prio TODO {:?}", &todos[p]);
                         todos[p].decrease_priority(); //Mark TODO read
                         storage::update_todo(db, &todos[p])?;
                     }
                 }
                 Action::IncreaseProgress => {
                     if !todos.is_empty() {
-                        debug!("(Service) Up progress TODO {:?}", &todos[p]);
                         todos[p].increase_progress(); //Mark TODO read
                         storage::update_todo(db, &todos[p])?;
                     }
                 }
                 Action::DecreaseProgress => {
                     if !todos.is_empty() {
-                        debug!("(Service) Down progress TODO {:?}", &todos[p]);
                         todos[p].decrease_progress(); //Mark TODO read
                         storage::update_todo(db, &todos[p])?;
                     }
                 }
                 Action::Delete => {
                     if !todos.is_empty() {
-                        debug!("(Service) Deleting TODO {:?}", &todos[p]);
                         storage::delete_todo(db, &todos[p])?;
                     }
                 }
                 Action::DeleteCompleted => {
                     if !todos.is_empty() {
-                        debug!("(Service) Deleting all completed");
                         delete_completed(db)?;
                     }
                 }
@@ -108,7 +99,13 @@ pub fn navigate_todos(
         }
         // If the navigation is None, this means exit the loop
         // First we export to the markdown file
-        export_to_md(&todos)?;
+        if env::var("EXPORT_ON_EXIT")
+            .unwrap_or("false".to_string())
+            .parse::<bool>()
+            .unwrap_or(false)
+        {
+            export_to_md(&todos)?;
+        }
         break;
     }
     Ok(())
